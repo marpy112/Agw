@@ -21,8 +21,9 @@ app.use('/api', async (req, res, next) => {
         await connectDatabase();
         next();
     } catch (error) {
-        console.error('Database connection failed:', error.name);
-        res.status(503).json({ success: false, message: 'Database unavailable. Check server configuration.' });
+        const diagnostic = connectDatabase.diagnose(error);
+        console.error('Database connection failed:', diagnostic.code, diagnostic.hint);
+        res.status(503).json({ success: false, code: diagnostic.code, message: 'Database unavailable. Check server configuration.' });
     }
 });
 

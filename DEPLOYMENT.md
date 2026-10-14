@@ -100,6 +100,12 @@ to remain valid; otherwise generate a new random value locally:
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
 
+If you connected MongoDB through Vercel's integration, the server also supports
+its automatically supplied `MONGODB_URI`. To use that value, remove the manual
+`CONNECTION_STRING` setting and redeploy. A nonempty `CONNECTION_STRING` takes
+priority. The integration URI selects its default database unless its URL
+specifies one; use the manual setting if you need to select an existing database.
+
 Click **Deploy**, then copy the assigned production domain from the project.
 The example below is a placeholder; replace it with yours:
 
@@ -112,6 +118,18 @@ Opening this URL should return:
 ```json
 {"success":true,"database":"connected"}
 ```
+
+On a 503 response, the `code` identifies the failure category. Vercel Logs show
+the same code and a hint, without printing credentials:
+
+| Code | Next step |
+| --- | --- |
+| `DB_URI_MISSING` | Supply either database variable in the server's Production environment and redeploy |
+| `DB_URI_INVALID` | Paste a complete URL starting with `mongodb+srv://` or `mongodb://`, without variable-name prefixes or quotes |
+| `DB_AUTH_FAILED` | Check the database username/password, URL encoding, and authentication database |
+| `DB_DNS_FAILED` | Check the complete cluster hostname and Atlas cluster availability |
+| `DB_NETWORK_FAILED` | Check Atlas Network Access and cluster availability |
+| `DB_CONNECTION_FAILED` | Check the database configuration and Atlas cluster status |
 
 The root URL also returns a small API status response. If health returns 503,
 check the database URI, credentials, database name, and Atlas network access.

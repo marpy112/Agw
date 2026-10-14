@@ -29,7 +29,7 @@ test('concurrent requests share a connection and a failure can be retried', asyn
       return mongoose;
     },
   };
-  const connect = loadHelper('database.js', { mongoose }, { CONNECTION_STRING: 'test-only' });
+  const connect = loadHelper('database.js', { mongoose }, { CONNECTION_STRING: 'mongodb://test.invalid/agri' });
   const failures = await Promise.allSettled([connect(), connect()]);
   assert.ok(failures.every((result) => result.status === 'rejected'));
   assert.equal(attempts, 1);
@@ -43,6 +43,37 @@ test('missing database settings fail without attempting a connection', async () 
     mongoose: { connection: { readyState: 0 }, connect() { assert.fail('Unexpected connection'); } },
   });
   await assert.rejects(connect(), /CONNECTION_STRING/);
+});
+
+test('integration URI works when the manual setting is empty; manual setting takes priority', async () => {
+  for (const manual of ['', '  ', 'mongodb://manual.invalid/agri']) {
+    let connectedUri;
+    const connect = loadHelper('database.js', {
+      mongoose: { connection: { readyState: 0 }, connect: async (uri) => { connectedUri = uri; } },
+    }, { CONNECTION_STRING: manual, MONGODB_URI: 'mongodb://integration.invalid/agri' });
+    await connect();
+    assert.equal(connectedUri, manual.trim() || 'mongodb://integration.invalid/agri');
+  }
+});
+
+test('incorrectly pasted settings fail before connecting and diagnostics contain no credentials', async () => {
+  const connect = loadHelper('database.js', {
+    mongoose: { connection: { readyState: 0 }, connect() { assert.fail('Unexpected connection'); } },
+  }, { CONNECTION_STRING: 'MONGODB_URI="mongodb://user:private-password@host/agri"' });
+  await assert.rejects(connect(), (error) => error.code === 'DB_URI_INVALID');
+  for (const [error, expected] of [
+    [{ code: 'DB_URI_MISSING' }, 'DB_URI_MISSING'],
+    [{ name: 'MongoParseError' }, 'DB_URI_INVALID'],
+    [{ code: 18 }, 'DB_AUTH_FAILED'],
+    [{ code: 'ENOTFOUND' }, 'DB_DNS_FAILED'],
+    [{ message: 'querySrv ECONNREFUSED' }, 'DB_DNS_FAILED'],
+    [{ name: 'MongooseServerSelectionError' }, 'DB_NETWORK_FAILED'],
+    [{ message: 'mongodb://user:private-password@host/agri' }, 'DB_CONNECTION_FAILED'],
+  ]) {
+    const result = connect.diagnose(error);
+    assert.equal(result.code, expected);
+    assert.ok(!JSON.stringify(result).includes('private-password'));
+  }
 });
 
 function uploadHarness() {
@@ -100,6 +131,7 @@ test('image saves accept client URLs and admin preview objects and remove duplic
 
 test('Express imports without binding a port and reports unavailable database', async () => {
   process.env.CONNECTION_STRING = '';
+  process.env.MONGODB_URI = '';
   const app = require('../index');
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
@@ -109,7 +141,9 @@ test('Express imports without binding a port and reports unavailable database', 
     assert.equal(root.status, 200);
     const health = await fetch(`${base}/api/health`);
     assert.equal(health.status, 503);
-    assert.equal((await health.json()).success, false);
+    const result = await health.json();
+    assert.equal(result.success, false);
+    assert.equal(result.code, 'DB_URI_MISSING');
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
