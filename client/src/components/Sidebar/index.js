@@ -1,169 +1,48 @@
-import React, { useEffect, useState, useContext } from "react";
-import bannerImg from "../../assets/images/banner1.jpg";
+import React, { useContext, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { Drawer, Slider } from "@mui/material";
 import Rating from "@mui/material/Rating";
-
-import RangeSlider from "react-range-slider-input";
-import "react-range-slider-input/dist/style.css";
-
+import { FiX } from "react-icons/fi";
 import { MyContext } from "../../App";
 import { fetchDataFromApi } from "../../utils/api";
 
-function valuetext(value) {
-  return `${value}°C`;
-}
-const label = { inputProps: { "aria-label": "Checkbox demo" } };
-
-const Sidebar = (props) => {
-  const [value, setValue] = useState([100, 60000]);
-  const [value2, setValue2] = useState(0);
-  const [brandFilters, setBrandFilters] = React.useState([]);
-  const [ratingsArr, setRatings] = React.useState([]);
-  const [totalLength, setTotalLength] = useState([]);
-  const [catId, setCatId] = useState("");
-  const [homeSideBanners, setHomeSideBanners] = useState([]);
-
+const Sidebar = ({ filterByRating, filterByPrice }) => {
+  const [price, setPrice] = useState([0, 60000]);
+  const [banners, setBanners] = useState([]);
   const context = useContext(MyContext);
-
-  const filterByRating = (rating) => {
-    props.filterByRating(rating);
-  };
-
   const { id } = useParams();
+  const { setIsOpenFilters } = context;
 
   useEffect(() => {
-    setCatId(id);
-    props.filterByPrice(value, id);
-    fetchDataFromApi("/api/homeSideBanners").then((res) => {
-      setHomeSideBanners(res);
+    setPrice([0, 60000]);
+    setIsOpenFilters(false);
+  }, [id, setIsOpenFilters]);
+
+  useEffect(() => {
+    let active = true;
+    fetchDataFromApi("/api/homeSideBanners").then((response) => {
+      if (active) setBanners(Array.isArray(response) ? response : []);
     });
-  }, [id]);
+    return () => { active = false; };
+  }, []);
 
-  useEffect(() => {
-    props.filterByPrice(value, catId);
-  }, [value]);
+  const close = () => setIsOpenFilters(false);
+  const filters = <div className="store-filter-content">
+    <div className="store-filter-section"><h3>Shop by category</h3>
+      <div className="store-filter-categories">{context.categories?.categoryList?.map((category) => <Link className={id === (category.id || category._id) ? "is-selected" : ""} key={category.id || category._id} to={"/products/category/" + (category.id || category._id)} onClick={close}>{category.images?.[0] && <img src={category.images[0]} alt="" />}{category.name}</Link>)}</div>
+    </div>
+    <div className="store-filter-section"><h3>Price range</h3>
+      <Slider value={price} onChange={(_, value) => setPrice(value)} min={0} max={60000} step={5} getAriaLabel={(index) => index === 0 ? "Minimum price" : "Maximum price"} valueLabelDisplay="auto" />
+      <div className="store-price-range"><span>₱{price[0].toLocaleString()}</span><span>₱{price[1].toLocaleString()}</span></div>
+      <button className="store-button store-button-light" onClick={() => { filterByPrice(price, id); close(); }}>Apply price range</button>
+    </div>
+    <div className="store-filter-section"><h3>Customer rating</h3>
+      <div className="store-rating-filters">{[5, 4, 3, 2, 1].map((rating) => <button key={rating} aria-label={"Filter by " + rating + " stars"} onClick={() => { filterByRating(rating); close(); }}><Rating value={rating} size="small" readOnly /><span>{rating} stars</span></button>)}</div>
+    </div>
+    {banners.filter((banner) => banner.images?.[0] && (banner.subCatId || banner.catId)).map((banner, index) => <Link className="store-filter-banner" key={banner.id || banner._id || index} to={banner.subCatId ? "/products/subCat/" + banner.subCatId : "/products/category/" + banner.catId} onClick={close}><img src={banner.images[0]} alt={banner.name || "Explore this collection"} loading="lazy" /></Link>)}
+  </div>;
 
-  return (
-    <>
-      <div className={`sidebar ${context.isOpenFilters === true && "open"}`}>
-        <div className="card border-0 shadow">
-          <h3>Category</h3>
-          <div className="catList">
-            {context?.categories?.categoryList?.length !== 0 &&
-              context?.categories?.categoryList !== undefined &&
-              context?.categories?.categoryList?.map((cat, index) => {
-                return (
-                  <Link to={`/products/category/${cat?.id}`} index={index}>
-                    <div className="catItem d-flex align-items-center">
-                      <span className="img">
-                        <img 
-                        src={cat?.images[0]}
-                         width={30} />
-                      </span>
-                      <h4 className="mb-0 ml-3 mr-3 text-capitalize">
-                        {cat?.name}
-                      </h4>
-                    </div>
-                  </Link>
-                );
-              })}
-          </div>
-        </div>
-
-        <div className="card border-0 shadow priceCard">
-          <h3 className="mb-4">Filter by price</h3>
-
-          <RangeSlider
-            value={value}
-            onInput={setValue}
-            min={100}
-            max={60000}
-            step={5}
-          />
-
-          <div className="d-flex pt-2 pb-2 priceRange">
-            <span>
-              From: <strong className="text-success">₱ {value[0]}</strong>
-            </span>
-            <span className="ml-auto">
-              From: <strong className="text-success">₱ {value[1]}</strong>
-            </span>
-          </div>
-
-          <br />
-
-          <div className="filters pt-0 pb-0">
-            <h5>Filter By Ratings</h5>
-            <ul className="pl-2 mb-0">
-              <li className="cursor" onClick={() => {
-                filterByRating(5);
-                context?.setIsOpenFilters(!context?.isOpenFilters)
-                }}>
-                <Rating name="read-only" value={5} readOnly size="small" />
-              </li>
-              <li className="cursor" onClick={() => {
-                filterByRating(4);
-                context?.setIsOpenFilters(!context?.isOpenFilters)
-                }}>
-                <Rating name="read-only" value={4} readOnly size="small" />
-              </li>
-              <li className="cursor" onClick={() => {
-                filterByRating(3);
-                context?.setIsOpenFilters(!context?.isOpenFilters)
-                }}>
-                <Rating name="read-only" value={3} readOnly size="small" />
-              </li>
-              <li className="cursor" onClick={() => {
-                filterByRating(2);
-                context?.setIsOpenFilters(!context?.isOpenFilters)
-                }}>
-                <Rating name="read-only" value={2} readOnly size="small" />
-              </li>
-              <li className="cursor" onClick={() => {
-                filterByRating(1);
-                context?.setIsOpenFilters(!context?.isOpenFilters)
-                }}>
-                <Rating name="read-only" value={1} readOnly size="small" />
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="sidebarAds">
-        {homeSideBanners?.length !== 0 &&
-          homeSideBanners?.map((item, index) => {
-            return (
-              <div className="banner mb-3" key={index} onClick={()=>context?.setIsOpenFilters(!context?.isOpenFilters)}>
-                {item?.subCatId !== null ? (
-                  <Link
-                    to={`/products/subCat/${item?.subCatId}`}
-                    className="box"
-                  >
-                    <img
-                     src={item?.images[0]}
-                      className="w-100 transition"
-                      alt="banner img"
-                    />
-                  </Link>
-                ) : (
-                  <Link
-                    to={`/products/category/${item?.catId}`}
-                    className="box"
-                  >
-                    <img
-                     src={item?.images[0]}
-                      className="cursor w-100 transition"
-                      alt="banner img"
-                    />
-                  </Link>
-                )}
-              </div>
-            );
-          })}
-            </div>
-      </div>
-    </>
-  );
+  return context.windowWidth < 992 ? <Drawer open={context.isOpenFilters} onClose={close} PaperProps={{ className: "store-mobile-drawer store-filter-drawer" }}><div className="store-drawer-heading"><strong>Filter products</strong><button className="store-icon-button" aria-label="Close filters" onClick={close}><FiX /></button></div>{filters}</Drawer> : filters;
 };
 
 export default Sidebar;

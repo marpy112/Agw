@@ -262,6 +262,7 @@ function App() {
                 {alertBox.msg}
               </Alert>
             </Snackbar>
+            <main id="main-content" tabIndex={-1}>
             <Routes>
               <Route exact={true} path="/" element={<Home />} />
               <Route
@@ -287,6 +288,7 @@ function App() {
               <Route exact={true} path="/forgotPassword" element={<ForgotPassword />} />
               <Route exact={true} path="*" element={<NotFound />} />
             </Routes>
+            </main>
             <Footer />
             <ChatBox />
           </BrowserRouter>

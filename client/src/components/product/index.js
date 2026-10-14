@@ -1,180 +1,60 @@
-import React, { useEffect, useState, useContext } from "react";
-import "./style.css";
-import Rating from "@mui/material/Rating";
-import { Button } from "@mui/material";
+import React, { useContext, useState } from "react";
 import { Link } from "react-router-dom";
-import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
-import FavoriteBorderOutlinedIcon from "@mui/icons-material/FavoriteBorderOutlined";
-import FavoriteIcon from "@mui/icons-material/Favorite";
-import CompareArrowsOutlinedIcon from "@mui/icons-material/CompareArrowsOutlined";
-import RemoveRedEyeOutlinedIcon from "@mui/icons-material/RemoveRedEyeOutlined";
-import Skeleton from '@mui/material/Skeleton';
-import { IoIosImages } from "react-icons/io";
+import Rating from "@mui/material/Rating";
+import { FiArrowUpRight, FiHeart, FiImage } from "react-icons/fi";
 import { MyContext } from "../../App";
 import { fetchDataFromApi, postData } from "../../utils/api";
+import "./style.css";
 
-const Product = (props) => {
-  const [productData, setProductData] = useState();
-  const [isAdded, setIsadded] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [addedInMyList, setAddedInMyList] = useState(false);
+const currency = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 2 });
 
+const Product = ({ item }) => {
   const context = useContext(MyContext);
+  const [saving, setSaving] = useState(false);
+  const [failedImage, setFailedImage] = useState(null);
+  if (!item) return null;
+  const id = item.id || item._id;
+  const saved = context.isLogin && context.myListData?.some((entry) => String(entry.productId) === String(id));
+  const price = Number(item.price) || 0;
+  const oldPrice = Number(item.oldPrice) || 0;
+  const discount = oldPrice > price && price > 0 ? Math.round((1 - price / oldPrice) * 100) : 0;
+  const outOfStock = item.countInStock != null && Number(item.countInStock) === 0;
 
-  useEffect(() => {
-    setProductData(props.item);
-  }, [props.item]);
-
-  
-  useEffect(() => {
-    setTimeout(() => {
-        setIsLoading(false);
-    }, 500);
-}, []);
-
-
-  const addToMyList = (product) => {
-    if (context?.isLogin === true) {
-      const obj = {
-        productTitle: product?.name,
-        image: product?.images[0],
-        rating: product?.rating,
-        price: product?.price,
-        productId: product?.id,
-        userId: context?.user?.userId,
-      };
-
-      postData(`/api/my-list/add`, obj).then((res) => {
-        if (res.status !== false) {
-          context?.setAlertBox({
-            open: true,
-            error: false,
-            msg: "The product added in my list",
-          });
-
-          setAddedInMyList(true);
-
-          fetchDataFromApi(`/api/my-list?userId=${context?.user?.userId}`).then(
-            (res) => {
-              context?.setMyListData(res);
-            }
-          );
-        }
-      });
-    } else {
-      context.setAlertBox({
-        open: true,
-        error: true,
-        msg: "Please Login to continue",
-      });
+  const saveProduct = async () => {
+    if (!context.isLogin) {
+      context.setAlertBox({ open: true, error: true, msg: "Sign in to save products to your wishlist." });
+      return;
     }
-  };
-
-  const handleMouseEnter = (productId) => {
-    fetchDataFromApi(
-      `/api/my-list?productId=${productId}&userId=${context?.user?.userId}`
-    ).then((res) => {
-      if (res?.length !== 0) {
-        setAddedInMyList(true);
-      }
-    });
+    if (saving || saved) return;
+    setSaving(true);
+    try {
+      const response = await postData("/api/my-list/add", { productTitle: item.name, image: item.images?.[0], rating: item.rating, price, productId: id, userId: context.user?.userId });
+      if (!response || response.status === false || response.success === false) throw new Error(response?.msg || "We couldn’t save this product. Please try again.");
+      const list = await fetchDataFromApi("/api/my-list?userId=" + context.user?.userId);
+      context.setMyListData(Array.isArray(list) ? list : []);
+      context.setAlertBox({ open: true, error: false, msg: "Product saved to your wishlist." });
+    } catch (error) {
+      context.setAlertBox({ open: true, error: true, msg: error.message });
+    } finally { setSaving(false); }
   };
 
   return (
-    <div
-      className="productThumb"
-      onMouseEnter={() => handleMouseEnter(productData?.id)}
-    >
-      {
-        // props.tag !== null && props.tag !== undefined &&
-        // <span className={`badge ${props.tag}`}>{props.tag}</span>
-      }
-
-      {productData !== undefined && (
-        <>
-          <div className="imgWrapper">
-            <Link to={`/product/${productData.id}`}>
-              <div className="wrapper mb-3">
-              {
-                            isLoading === true ?
-                                <Skeleton variant="rectangular" width={300} height={400}>
-                                    <IoIosImages/>
-                                </Skeleton>
-
-                                :
-
-                                <img src={`${productData?.images[0]}`} className="w-100" />
-                        }
-
-                
-              </div>
-
-              <div className="overlay transition"></div>
-            </Link>
-
-            <ul className="actions list list-inline mb-0">
-              <li className="list-inline-item">
-                <a
-                  className="cursor"
-                  onClick={() => addToMyList(productData)}
-                  tooltip={`${
-                    addedInMyList === true
-                      ? "Added in Wishlist"
-                      : "Add to Wishlist"
-                  }`}
-                >
-                  {addedInMyList === true ? (
-                    <FavoriteIcon />
-                  ) : (
-                    <FavoriteBorderOutlinedIcon />
-                  )}
-                </a>
-              </li>
-
-              <li className="list-inline-item">
-                <Link
-                  to={`/product/${productData.id}`}
-                  className="cursor"
-                  tooltip="Quick View"
-                >
-                  <RemoveRedEyeOutlinedIcon />
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          <div className="info">
-            <span className="d-block catName">{productData?.catName}</span>
-            <h4 className="title mb-0">
-              <Link to={`/product/${productData.id}`}>
-                {productData.name.substr(0, 25) + "..."}
-              </Link>
-            </h4>
-            <Rating
-              name="half-rating-read"
-              value={parseFloat(productData?.rating)}
-              precision={0.5}
-              size="small"
-              readOnly
-            />
-            <span className="brand d-block text-g">
-              By <Link className="text-g">{productData?.brand}</Link>
-            </span>
-
-            <div className="d-flex align-items-center mt-3">
-              <div className="d-flex align-items-center w-100">
-                <span className="price text-g font-weight-bold">
-                ₱ {productData?.price}
-                </span>
-                <span className="oldPrice ml-2">
-                ₱{productData?.oldPrice}
-                </span>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+    <article className="store-product-card">
+      <div className="store-product-media">
+        <Link to={"/product/" + id} aria-label={"View " + item.name}>
+          {item.images?.[0] && failedImage !== item.images[0] ? <img src={item.images[0]} alt={item.name} loading="lazy" onError={() => setFailedImage(item.images[0])} /> : <span className="store-image-fallback"><FiImage /><small>Image unavailable</small></span>}
+        </Link>
+        {outOfStock ? <span className="store-product-tag is-unavailable">Out of stock</span> : discount > 0 ? <span className="store-product-tag">{discount}% off</span> : item.isFeatured ? <span className="store-product-tag">Featured</span> : null}
+        <button className={"store-wishlist-button" + (saved ? " is-saved" : "")} aria-label={saved ? item.name + " is in your wishlist" : "Save " + item.name + " to wishlist"} aria-pressed={Boolean(saved)} disabled={saving || Boolean(saved)} onClick={saveProduct}><FiHeart /></button>
+      </div>
+      <div className="store-product-info">
+        <span className="store-product-category">{item.catName || "Growing essentials"}</span>
+        <h3><Link to={"/product/" + id}>{item.name}</Link></h3>
+        {item.brand && <span className="store-product-brand">{item.brand}</span>}
+        <div className="store-product-rating"><Rating value={Number(item.rating) || 0} precision={0.5} size="small" readOnly /><span>{Number(item.rating) > 0 ? Number(item.rating).toFixed(1) : "Not yet rated"}</span></div>
+        <div className="store-product-bottom"><div><strong>{currency.format(price)}</strong>{oldPrice > price && <del>{currency.format(oldPrice)}</del>}</div><Link to={"/product/" + id} className="store-product-view" aria-label={"View details for " + item.name}><FiArrowUpRight /></Link></div>
+      </div>
+    </article>
   );
 };
 

@@ -1,163 +1,44 @@
-import React, { useState, useEffect, useContext } from "react";
-import { Link, useParams } from "react-router-dom";
-import Sidebar from "../../components/Sidebar";
-import Product from "../../components/product";
-import { Button } from "@mui/material";
-
+import React, { useContext, useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { FiArrowLeft, FiSearch } from "react-icons/fi";
 import { MyContext } from "../../App";
 import { fetchDataFromApi } from "../../utils/api";
+import Product from "../../components/product";
+import { ProductSkeletons } from "../Home";
 
-import CircularProgress from "@mui/material/CircularProgress";
-
-const SearchPage = (props) => {
-  const [filterId, setFilterId] = useState("");
-  const [isLoading, setisLoading] = useState(false);
-  const [productData, setProductData] = useState([]);
-  const [currentCat,setCurrentCat] = useState();
-
-  const context = useContext(MyContext);
-
-  const { id } = useParams();
+const SearchPage = () => {
+  const [params] = useSearchParams();
+  const query = params.get("q") || "";
+  const { setEnableFilterTab } = useContext(MyContext);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [sort, setSort] = useState("relevance");
 
   useEffect(() => {
+    let active = true;
+    setEnableFilterTab(false);
     window.scrollTo(0, 0);
-    setFilterId("");
-
-    let url = window.location.href;
-    let apiEndPoint = "";
-
-    if (url.includes("subCat")) {
-      apiEndPoint = `/api/products/subCatId?subCatId=${id}&location=${localStorage.getItem(
-        "location"
-      )}`;
-    }
-    if (url.includes("category")) {
-      apiEndPoint = `/api/products/catId?catId=${id}&location=${localStorage.getItem(
-        "location"
-      )}`;
-    }
-
-
-    fetchDataFromApi(`/api/category/${id}`).then((res) => {
-        setCurrentCat(res)
-        console.log(res)
+    if (!query.trim()) { setProducts([]); setLoading(false); return; }
+    setLoading(true);
+    fetchDataFromApi("/api/search?q=" + encodeURIComponent(query.trim())).then((response) => {
+      if (active) { setProducts(Array.isArray(response) ? response : []); setLoading(false); }
     });
+    return () => { active = false; };
+  }, [query, setEnableFilterTab]);
 
-    context.setEnableFilterTab(true);
+  const sorted = useMemo(() => {
+    const result = [...products];
+    if (sort === "price-low") result.sort((a, b) => Number(a.price) - Number(b.price));
+    if (sort === "price-high") result.sort((a, b) => Number(b.price) - Number(a.price));
+    if (sort === "rating") result.sort((a, b) => Number(b.rating) - Number(a.rating));
+    return result;
+  }, [products, sort]);
 
-  }, [id]);
-
-
-  const filterByRating=(rating)=>{
-    setisLoading(true);
-    let url = window.location.href;
-    let apiEndPoint = "";
-
-    if (url.includes("subCat")) {
-      apiEndPoint = `/api/products/rating?rating=${rating}&subCatId=${id}&location=${localStorage.getItem("location")}`;
-    }
-    if (url.includes("category")) {
-      apiEndPoint = `/api/products/rating?rating=${rating}&catId=${id}&location=${localStorage.getItem("location")}`;
-    }
-
-   
-
-    fetchDataFromApi(apiEndPoint).then((res) => {
-      setProductData(res)
-      setisLoading(false);
-      window.scrollTo({
-          top: 0,
-          behavior: 'smooth',
-      })
-  })
-
-
-  }
-
-
-  const filterByPrice=(price, catId)=>{
-    setisLoading(true);
-
-    var window_url = window.location.href;
-    var api_EndPoint = "";
-
-
-    if (filterId === "") {
-      if (window_url.includes("subCat")) {
-        api_EndPoint = `/api/products/fiterByPrice?minPrice=${
-          price[0]
-        }&maxPrice=${price[1]}&subCatId=${id}&location=${localStorage.getItem(
-          "location"
-        )}`;
-      }
-      if (window_url.includes("category")) {
-        api_EndPoint = `/api/products/fiterByPrice?minPrice=${
-          price[0]
-        }&maxPrice=${price[1]}&catId=${id}&location=${localStorage.getItem(
-          "location"
-        )}`;
-      }
-    }
-    if (filterId !== "") {
-      api_EndPoint = `/api/products/fiterByPrice?minPrice=${
-        price[0]
-      }&maxPrice=${
-        price[1]
-      }&subCatId=${filterId}&location=${localStorage.getItem(
-        "location"
-      )}`;
-    }
-
-
-    fetchDataFromApi(api_EndPoint).then((res) => {
-      setProductData(res)
-      setisLoading(false);
-  })
-
-  }
-
-  return (
-    <>
-      <section className="listingPage">
-        <div className="container-fluid">
-
-
-          <div className="listingData">
-            <div className="row">
-              <div className={`col-md-3 sidebarWrapper`}>
-                <Sidebar filterByRating={filterByRating} catId={id} filterByPrice={filterByPrice} />
-              </div>
-
-              <div className="col-md-9 rightContent homeProducts pt-0">
-                <div className="topStrip d-flex align-items-center">
-                  <p className="mb-0">
-                    We found <span className="text-success">{context?.searchItems?.length>0 && context?.searchItems?.length}</span> items for
-                    you!
-                  </p>
-                </div>
-
-                <div className="productRow pl-4 pr-3">
-                  {isLoading === true ? (
-                    <div className="loading d-flex align-items-center justify-content-center">
-                      <CircularProgress color="inherit" />
-                    </div>
-                  ) : (
-                    context?.searchItems?.map((item, index) => {
-                      return (
-                        <div className="item" key={index}>
-                          <Product item={item} />
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </>
-  );
+  return <section className="store-container store-search-page">
+    <Link className="store-text-link" to="/"><FiArrowLeft /> Back to the store</Link>
+    <div className="store-section-heading"><div><span className="store-eyebrow">FIND SOMETHING GOOD</span><h1>{query ? 'Results for “' + query + '”' : "What are you looking for?"}</h1><p>{loading ? "Looking through our products…" : query ? products.length + " product" + (products.length === 1 ? "" : "s") + " found" : "Use the search bar above to explore the store."}</p></div>{products.length > 0 && <label className="store-sort">Sort by<select value={sort} onChange={(event) => setSort(event.target.value)}><option value="relevance">Relevance</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="rating">Highest rated</option></select></label>}</div>
+    {loading ? <ProductSkeletons /> : sorted.length ? <div className="store-product-grid">{sorted.map((product) => <Product key={product.id || product._id} item={product} />)}</div> : <div className="store-empty" role="status"><FiSearch /><h2>{query ? "No products to show" : "Your next find starts here"}</h2><p>{query ? "Try a different keyword or browse the categories in our store." : "Search by product name, brand, or growing essential."}</p><Link to="/" className="store-button">Explore the store</Link></div>}
+  </section>;
 };
 
 export default SearchPage;

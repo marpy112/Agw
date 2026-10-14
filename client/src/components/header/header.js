@@ -1,292 +1,113 @@
-import React, { useState, useEffect, useRef } from "react";
-import "../header/header.css";
-import Logo from "../../assets/images/logo.png";
-import SearchIcon from "@mui/icons-material/Search";
-import Select from "../selectDrop/select";
-import axios from "axios";
-import LocationOnOutlinedIcon from "@mui/icons-material/LocationOnOutlined";
-import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
-import CircularProgress from "@mui/material/CircularProgress";
-import VerifiedIcon from "@mui/icons-material/Verified";
-import Button from "@mui/material/Button";
-import Person2OutlinedIcon from "@mui/icons-material/Person2Outlined";
-import FavoriteBorderOutlinedIcon from "@mui/icons-material/FavoriteBorderOutlined";
-import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
-import MenuIcon from "@mui/icons-material/Menu";
-import { ClickAwayListener } from "@mui/base/ClickAwayListener";
-
-import Nav from "./nav/nav";
-import { Link } from "react-router-dom";
-import { useContext } from "react";
-
+import React, { useContext, useEffect, useRef, useState } from "react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Button, Drawer, Menu, MenuItem } from "@mui/material";
+import { FiArrowRight, FiChevronDown, FiGrid, FiHeart, FiMapPin, FiMenu, FiSearch, FiShoppingBag, FiUser, FiX } from "react-icons/fi";
 import { MyContext } from "../../App";
-import { useNavigate } from "react-router-dom";
-import { fetchDataFromApi } from "../../utils/api";
+import Logo from "../../assets/images/logo.png";
+import "./header.css";
 
-const Header = (props) => {
-  const [isOpenDropDown, setisOpenDropDown] = useState(false);
-  const [isOpenAccDropDown, setisOpenAccDropDown] = useState(false);
-  
-
-  const headerRef = useRef();
-
+const Header = () => {
   const context = useContext(MyContext);
-  const history = useNavigate();
-
-  const [categories, setcategories] = useState([]);
-  const [countryData, setCountryData] = useState([]);
-  const [isOpenNav, setIsOpenNav] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const searchInput = useRef();
-
-  const countryList = [];
-
-  useEffect(() => {
-    window.addEventListener("scroll", () => {
-      let position = window.pageYOffset;
-      if (position > 100) {
-        headerRef.current.classList.add("fixed");
-      } else {
-        headerRef.current.classList.remove("fixed");
-      }
-    });
-
-    getCountry("https://countriesnow.space/api/v0.1/countries/");
-  }, []);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const inputRef = useRef(null);
+  const [query, setQuery] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [categoryAnchor, setCategoryAnchor] = useState(null);
+  const [accountAnchor, setAccountAnchor] = useState(null);
+  const [countries, setCountries] = useState([]);
+  const categories = context.categories?.categoryList || [];
+  const { isOpenSearch, closeSearch } = context;
 
   useEffect(() => {
-    setcategories(context.categories);
-  }, [context.categories]);
+    if (!drawerOpen || countries.length) return;
+    const controller = new AbortController();
+    fetch("https://countriesnow.space/api/v0.1/countries/", { signal: controller.signal })
+      .then((response) => response.json())
+      .then((response) => setCountries(Array.isArray(response.data) ? response.data.map((item) => item.country) : []))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [drawerOpen, countries.length]);
 
-  const getCountry = async (url) => {
-    try {
-      await axios.get(url).then((res) => {
-        if (res !== null) {
-          //console.log(res.data.data);
-          res.data.data.map((item, index) => {
-            countryList.push(item);
-            //console.log(item.country)
-          });
+  useEffect(() => {
+    setDrawerOpen(false);
+    setCategoryAnchor(null);
+    setAccountAnchor(null);
+  }, [location.pathname, location.search]);
 
-          //console.log(countryList)
-          setCountryData(countryList);
-        }
-      });
-    } catch (error) {
-      console.log(error.message);
+  useEffect(() => {
+    if (isOpenSearch) {
+      inputRef.current?.focus();
+      inputRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      closeSearch();
     }
+  }, [isOpenSearch, closeSearch]);
+
+  const search = (event) => {
+    event.preventDefault();
+    if (query.trim()) navigate("/search?q=" + encodeURIComponent(query.trim()));
   };
 
   const logout = () => {
-    context.setIsLogin(false);
-    localStorage.removeItem("user");
-    localStorage.removeItem("token");
-    history("/signIn");
+    context.signOut();
+    context.setCartItems([]);
+    context.setMyListData([]);
+    setAccountAnchor(null);
+    navigate("/signIn");
   };
 
-  const searchProducts = (e) => {
-    //alert(searchInput.current.value);
-    if (searchInput.current.value !== "") {
-      setIsLoading(true);
-      fetchDataFromApi(`/api/search?q=${searchInput.current.value}`).then(
-        (res) => {
-          context?.setSearchItems(res);
-          setTimeout(() => {
-            history("/search");
-            setIsLoading(false);
-            searchInput.current.value = "";
-            context?.closeSearch()
-          }, 2000);
-        }
-      );
-    }
-  };
-
-  const selectedSelectBoxItem = (name, id) => {
-    if (name === "Your Location") {
-      localStorage.setItem("location", "All");
-    } else {
-      localStorage.setItem("location", name);
-    }
-    window.location.href = "/"
-  };
-
-
-  const openNav = () => {
-    setIsOpenNav(true);
-    context.setIsopenNavigation(true)
-    context?.setIsBottomShow(false);
-}
-
-const closeNav = () => {
-    setIsOpenNav(false);
-    setisOpenAccDropDown(false)
-    context.setIsopenNavigation(false);
-    context?.setIsBottomShow(true);
-}
+  const categoryLink = (category) => "/products/category/" + (category.id || category._id);
+  const childLink = (child) => "/products/subCat/" + (child.id || child._id);
 
   return (
-    <>
-      <div className="headerWrapper" ref={headerRef}>
-        <header>
-          <div className="container-fluid">
-            <div className="row">
-              <div className="col-sm-2 part1 d-flex align-items-center">
-                {context?.windowWidth < 992 && <MenuIcon onClick={openNav} />}
-                <Link to="/">
-                  <img src={Logo} className="logo" />
-                </Link>
-
-                {context?.windowWidth < 992 && (
-                  <ul className="list list-inline mb-0 headerTabs pl-0">
-                    <li className="list-inline-item ml-0">
-                      <span>
-                        <Link to={"/cart"}>
-                          <ShoppingCartOutlinedIcon />
-                          <span className="badge bg-success rounded-circle">
-                            {context.cartItems.length}
-                          </span>
-                          Cart
-                        </Link>
-                      </span>
-                    </li>
-                  </ul>
-                )}
-              </div>
-
-              {/*headerSearch start here */}
-              <div className="col-sm-5 part2">
-                <div className={`headerSearch d-flex align-items-center ${context?.isOpenSearch === true ? 'open' : ''}`}>
-                  <div className="search">
-                    <input
-                      type="text"
-                      placeholder="Search for items..."
-                      ref={searchInput}
-                    />
-                    {isLoading === true ? (
-                      <CircularProgress
-                        color="inherit"
-                        className="searchIcon loading_"
-                      />
-                    ) : (
-                      <SearchIcon
-                        className="searchIcon cursor"
-                        onClick={searchProducts}
-                      />
-                    )}
-                  </div>
-                </div>
-              </div>
-              {/*headerSearch start here */}
-
-              <div className="col-sm-5 d-flex align-items-center part3 res-hide">
-                <div className="ml-auto d-flex align-items-center">
-              
-                  <ClickAwayListener
-                    onClickAway={() => setisOpenDropDown(false)}
-                  >
-                    <ul className="list list-inline mb-0 headerTabs">
-                      <li className="list-inline-item">
-                        <Link to="/myList">
-                          <span>
-                            <FavoriteBorderOutlinedIcon />
-                            <span className="badge bg-success rounded-circle">
-                              {context?.myListData?.length}
-                            </span>
-                            Wishlist
-                          </span>
-                        </Link>
-                      </li>
-                      <li className="list-inline-item">
-                        <span>
-                          <Link to={"/cart"}>
-                            <ShoppingCartOutlinedIcon />
-                            <span className="badge bg-success rounded-circle">
-                              {context.cartItems.length}
-                            </span>
-                            Cart
-                          </Link>
-                        </span>
-                      </li>
-
-                      {context.isLogin === true ? (
-                        <li className="list-inline-item">
-                          <span
-                            onClick={() => setisOpenDropDown(!isOpenDropDown)}
-                          >
-                            <Person2OutlinedIcon />
-                            Account
-                          </span>
-
-                          {isOpenDropDown !== false && (
-                            <ul className="dropdownMenu">
-                              <li>
-                                <Link to="/my-account">
-                                  <Button
-                                    className="align-items-center"
-                                    onClick={() =>
-                                      setisOpenDropDown(!isOpenDropDown)
-                                    }
-                                  >
-                                    <Person2OutlinedIcon /> My Account
-                                  </Button>
-                                </Link>
-                              </li>
-                              <li>
-                                <Link to="/orders">
-                                  <Button
-                                    onClick={() =>
-                                      setisOpenDropDown(!isOpenDropDown)
-                                    }
-                                  >
-                                    <VerifiedIcon /> Orders
-                                  </Button>
-                                </Link>
-                              </li>
-                              <li>
-                                <Link to="/myList">
-                                  <Button
-                                    onClick={() =>
-                                      setisOpenDropDown(!isOpenDropDown)
-                                    }
-                                  >
-                                    <FavoriteBorderOutlinedIcon /> My Wishlist
-                                  </Button>
-                                </Link>
-                              </li>
-
-                              <li>
-                                <Button onClick={logout}>
-                                  <LogoutOutlinedIcon /> Sign out
-                                </Button>
-                              </li>
-                            </ul>
-                          )}
-                        </li>
-                      ) : (
-                        <li className="list-inline-item">
-                          <Link to={"/signIn"}>
-                            <Button className="btn btn-g">Sign In</Button>
-                          </Link>
-                        </li>
-                      )}
-                    </ul>
-                  </ClickAwayListener>
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {categories?.categoryList?.length !== 0 &&
-          categories?.categoryList !== undefined && (
-            <Nav data={categories?.categoryList} countryData={countryData.length !== 0 && countryData} openNav={isOpenNav} closeNav={closeNav} />
-          )}
+    <div className="store-header" role="banner">
+      <a href="#main-content" className="skip-link">Skip to content</a>
+      <div className="store-announcement">
+        <div className="store-container"><span>Rooted in agriculture. Growing with you.</span><span><FiMapPin /> Valencia City, Bukidnon</span></div>
       </div>
-
-      <div className="afterHeader"></div>
-    </>
+      <div className="store-container store-header-main">
+        <button className="store-icon-button mobile-menu-trigger" aria-label="Open navigation" onClick={() => setDrawerOpen(true)}><FiMenu /></button>
+        <Link className="store-brand" to="/" aria-label="Rich Agri Store home">
+          <img src={Logo} alt="" /><span>Rich Agri<span>YOUR EVERYDAY GROWING PARTNER</span></span>
+        </Link>
+        <form className="store-search" role="search" onSubmit={search}>
+          <FiSearch aria-hidden="true" />
+          <input ref={inputRef} type="search" aria-label="Search products" placeholder="Search seeds, supplies, and more..." value={query} onChange={(event) => setQuery(event.target.value)} />
+          <button type="submit" aria-label="Search"><FiArrowRight /></button>
+        </form>
+        <div className="store-header-actions">
+          <Link className="store-header-action wishlist-action" to="/myList"><span className="store-action-icon"><FiHeart />{context.myListData?.length > 0 && <span className="store-count">{context.myListData.length}</span>}</span><span>Wishlist</span></Link>
+          <Link className="store-header-action" to="/cart" aria-label={"Cart, " + (context.cartItems?.length || 0) + " items"}><span className="store-action-icon"><FiShoppingBag /><span className="store-count">{context.cartItems?.length || 0}</span></span><span>My cart</span></Link>
+          {context.isLogin ? <button className="store-header-action account-action" aria-haspopup="menu" aria-expanded={Boolean(accountAnchor)} onClick={(event) => setAccountAnchor(event.currentTarget)}><FiUser /><span>Account</span></button> : <Link className="store-sign-in" to="/signIn"><FiUser /><span>Sign in</span></Link>}
+        </div>
+      </div>
+      <div className="store-navigation">
+        <div className="store-container store-nav-inner" role="navigation" aria-label="Main navigation">
+          <button className="store-category-button" aria-haspopup="menu" aria-expanded={Boolean(categoryAnchor)} onClick={(event) => setCategoryAnchor(event.currentTarget)}><FiGrid /> Shop by category <FiChevronDown /></button>
+          <NavLink to="/" end>Home</NavLink>
+          {categories.slice(0, 4).map((category) => <NavLink key={category.id || category._id} to={categoryLink(category)}>{category.name}</NavLink>)}
+          <a className="store-nav-contact" href="tel:+639367469404">Need a hand? <strong>Contact us <FiArrowRight /></strong></a>
+        </div>
+      </div>
+      <Menu anchorEl={categoryAnchor} open={Boolean(categoryAnchor)} onClose={() => setCategoryAnchor(null)} PaperProps={{ className: "store-dropdown" }}>
+        {categories.length ? categories.map((category) => <div key={category.id || category._id}><MenuItem component={Link} to={categoryLink(category)} onClick={() => setCategoryAnchor(null)}>{category.name}</MenuItem>{category.children?.map((child) => <MenuItem className="store-subcategory" component={Link} key={child.id || child._id} to={childLink(child)} onClick={() => setCategoryAnchor(null)}>{child.name}</MenuItem>)}</div>) : <MenuItem disabled>Categories are currently unavailable</MenuItem>}
+      </Menu>
+      <Menu anchorEl={accountAnchor} open={Boolean(accountAnchor)} onClose={() => setAccountAnchor(null)} PaperProps={{ className: "store-dropdown" }}>
+        <MenuItem component={Link} to="/my-account" onClick={() => setAccountAnchor(null)}>My account</MenuItem><MenuItem component={Link} to="/orders" onClick={() => setAccountAnchor(null)}>My orders</MenuItem><MenuItem onClick={logout}>Sign out</MenuItem>
+      </Menu>
+      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} PaperProps={{ className: "store-mobile-drawer" }}>
+        <div className="store-drawer-heading"><strong>Rich Agri Store</strong><button className="store-icon-button" onClick={() => setDrawerOpen(false)} aria-label="Close navigation"><FiX /></button></div>
+        <div role="navigation" aria-label="Mobile navigation" className="store-drawer-links">
+          <label className="store-location-select">Shopping location<select value={context.selectedCountry || "All"} onChange={(event) => { localStorage.setItem("location", event.target.value); window.location.assign("/"); }}><option value="All">All locations</option>{[...new Set([context.selectedCountry, ...countries])].filter((country) => country && country !== "All").map((country) => <option key={country} value={country}>{country}</option>)}</select></label>
+          <Link to="/" onClick={() => setDrawerOpen(false)}>Home <FiArrowRight /></Link>
+          <span className="store-eyebrow">SHOP BY CATEGORY</span>
+          {categories.map((category) => <div key={category.id || category._id}><Link to={categoryLink(category)} onClick={() => setDrawerOpen(false)}>{category.name}<FiArrowRight /></Link>{category.children?.map((child) => <Link className="store-drawer-child" key={child.id || child._id} to={childLink(child)} onClick={() => setDrawerOpen(false)}>{child.name}</Link>)}</div>)}
+          {!categories.length && <p>Categories are currently unavailable.</p>}
+          <Link to="/myList" onClick={() => setDrawerOpen(false)}>My wishlist <FiHeart /></Link><Link to="/orders" onClick={() => setDrawerOpen(false)}>My orders <FiShoppingBag /></Link>
+          <Button className="store-button" component={Link} to={context.isLogin ? "/my-account" : "/signIn"} onClick={() => setDrawerOpen(false)}>{context.isLogin ? "My account" : "Sign in"}</Button>
+        </div>
+      </Drawer>
+    </div>
   );
 };
 

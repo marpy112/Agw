@@ -1,211 +1,73 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { FiBox, FiX } from "react-icons/fi";
 import Sidebar from "../../components/Sidebar";
 import Product from "../../components/product";
-import { Button } from "@mui/material";
-
 import { MyContext } from "../../App";
 import { fetchDataFromApi } from "../../utils/api";
+import { ProductSkeletons } from "../Home";
 
-import CircularProgress from "@mui/material/CircularProgress";
-
-const Listing = (props) => {
-  const [filterId, setFilterId] = useState("");
-  const [isLoading, setisLoading] = useState(false);
-  const [productData, setProductData] = useState([]);
-  const [currentCat,setCurrentCat] = useState();
-
-  const context = useContext(MyContext);
+const Listing = ({ single }) => {
   const { id } = useParams();
+  const { categories, selectedCountry, setEnableFilterTab } = useContext(MyContext);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState(null);
+  const [category, setCategory] = useState(null);
+  const activeFilter = filter?.category === id ? filter : null;
+  const categoryList = categories?.categoryList || [];
+  const categoryName = single
+    ? categoryList.find((item) => (item.id || item._id) === id)?.name
+    : categoryList.flatMap((item) => item.children || []).find((item) => (item.id || item._id) === id)?.name;
+  const title = categoryName || category?.name || "Explore the collection";
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    setEnableFilterTab(true);
+    return () => setEnableFilterTab(false);
+  }, [id, setEnableFilterTab]);
 
-
-    setFilterId("");
-
-    let url = window.location.href;
-    let apiEndPoint = "";
-
-    if (url.includes("subCat")) {
-      apiEndPoint = `/api/products/subCatId?subCatId=${id}&location=${localStorage.getItem(
-        "location"
-      )}`;
-    }
-    if (url.includes("category")) {
-      apiEndPoint = `/api/products/catId?catId=${id}&location=${localStorage.getItem(
-        "location"
-      )}`;
-    }
-
-    setisLoading(true);
-    fetchDataFromApi(`${apiEndPoint}`).then((res) => {
-      setProductData(res);
-      setisLoading(false);
+  useEffect(() => {
+    let active = true;
+    setCategory(null);
+    fetchDataFromApi("/api/category/" + encodeURIComponent(id)).then((response) => {
+      if (active) setCategory(response?.categoryData?.[0] || null);
     });
-
-
-    fetchDataFromApi(`/api/category/${id}`).then((res) => {
-        setCurrentCat(res)
-        console.log(res)
-    });
-
-    context.setEnableFilterTab(true);
-
+    return () => { active = false; };
   }, [id]);
 
-
-  const filterByRating=(rating)=>{
-    setisLoading(true);
-    let url = window.location.href;
-    let apiEndPoint = "";
-
-    if (url.includes("subCat")) {
-      apiEndPoint = `/api/products/rating?rating=${rating}&subCatId=${id}&location=${localStorage.getItem("location")}`;
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    const params = new URLSearchParams({ [single ? "catId" : "subCatId"]: id, location: selectedCountry || "All" });
+    let endpoint = single ? "catId" : "subCatId";
+    if (activeFilter?.kind === "price") {
+      endpoint = "fiterByPrice";
+      params.set("minPrice", activeFilter.price[0]);
+      params.set("maxPrice", activeFilter.price[1]);
     }
-    if (url.includes("category")) {
-      apiEndPoint = `/api/products/rating?rating=${rating}&catId=${id}&location=${localStorage.getItem("location")}`;
+    if (activeFilter?.kind === "rating") {
+      endpoint = "rating";
+      params.set("rating", activeFilter.rating);
     }
+    fetchDataFromApi("/api/products/" + endpoint + "?" + params.toString()).then((response) => {
+      if (!active) return;
+      setProducts(Array.isArray(response?.products) ? response.products : []);
+      setLoading(false);
+    });
+    return () => { active = false; };
+  }, [id, single, selectedCountry, activeFilter]);
 
-   
-
-    fetchDataFromApi(apiEndPoint).then((res) => {
-      setProductData(res)
-      setisLoading(false);
-      window.scrollTo({
-          top: 0,
-          behavior: 'smooth',
-      })
-  })
-
-
-  }
-
-
-  const filterByPrice=(price, catId)=>{
-    setisLoading(true);
-
-    var window_url = window.location.href;
-    var api_EndPoint = "";
-
-
-    if (filterId === "") {
-      if (window_url.includes("subCat")) {
-        api_EndPoint = `/api/products/fiterByPrice?minPrice=${
-          price[0]
-        }&maxPrice=${price[1]}&subCatId=${id}&location=${localStorage.getItem(
-          "location"
-        )}`;
-      }
-      if (window_url.includes("category")) {
-        api_EndPoint = `/api/products/fiterByPrice?minPrice=${
-          price[0]
-        }&maxPrice=${price[1]}&catId=${id}&location=${localStorage.getItem(
-          "location"
-        )}`;
-      }
-    }
-    if (filterId !== "") {
-      api_EndPoint = `/api/products/fiterByPrice?minPrice=${
-        price[0]
-      }&maxPrice=${
-        price[1]
-      }&subCatId=${filterId}&location=${localStorage.getItem(
-        "location"
-      )}`;
-    }
-
-
-    fetchDataFromApi(api_EndPoint).then((res) => {
-      setProductData(res)
-      setisLoading(false);
-  })
-
-  }
-
-  return (
-    <>
-
-    {
-      context.windowWidth < 992 && context?.isOpenFilters===true &&
-      <>
-          {
-              context.isopenNavigation===false &&
-              <Button className='btn-g btn-lg w-100 filterBtn' onClick={() => context.openFilters()}>Filters</Button>
-          }
-      </>
-    
-  }
-
-
-      <section className="listingPage">
-        <div className="container-fluid">
-
-        {
-          productData?.length!==0 && 
-          <div className="breadcrumb flex-column">
-          <h1 className="text-capitalize">{currentCat?.categoryData && currentCat?.categoryData[0]?.name}</h1>
-          <ul className="list list-inline mb-0">
-            <li className="list-inline-item">
-              <Link to={"/"}>Home </Link>
-            </li>
-            <li className="list-inline-item">
-              <Link to={`/products/category/${productData?.products[0]?.length!==0 && productData?.products[0]?.catId}`} className="text-capitalize">
-              {productData?.products[0] && productData?.products[0]?.catName}
-              </Link>
-            </li>
-
-
-            <li className="list-inline-item">
-              <Link to={`/products/subCat/${productData?.products[0]?.length!==0 && productData?.products[0]?.subCatId}`} className="text-capitalize">
-              {productData?.products[0] && productData?.products[0]?.subCatName}
-              </Link>
-            </li>
-
-            
-          </ul>
-          </div>
-        }
-
-
-       
-
-          <div className="listingData">
-            <div className="row">
-              <div className={`col-md-3 sidebarWrapper`}>
-                <Sidebar filterByRating={filterByRating} catId={id} filterByPrice={filterByPrice} />
-              </div>
-
-              <div className="col-md-9 rightContent homeProducts pt-0">
-                <div className="topStrip d-flex align-items-center">
-                  <p className="mb-0">
-                    We found <span className="text-success">{productData?.products?.length>0 && productData?.products?.length}</span> items for
-                    you!
-                  </p>
-                </div>
-
-                <div className="productRow pl-4 pr-3">
-                  {isLoading === true ? (
-                    <div className="loading d-flex align-items-center justify-content-center">
-                      <CircularProgress color="inherit" />
-                    </div>
-                  ) : (
-                    productData?.products?.map((item, index) => {
-                      return (
-                        <div className="item" key={index}>
-                          <Product item={item} />
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </>
-  );
+  return <section className="store-container store-listing-page">
+    <div className="store-listing-breadcrumb"><Link to="/">Home</Link><span>/</span><span>{title}</span></div>
+    <div className="store-section-heading"><div><span className="store-eyebrow">FIND YOUR NEXT GROWING ESSENTIAL</span><h1>{title}</h1><p>{loading ? "Finding your essentials…" : products.length + " product" + (products.length === 1 ? "" : "s") + " to explore"}</p></div>{activeFilter && <button className="store-clear-filter" onClick={() => setFilter(null)}><FiX /> Clear filter</button>}</div>
+    <div className="store-listing-layout">
+      <aside aria-label="Product filters"><Sidebar filterByPrice={(price) => setFilter({category:id,kind:"price",price})} filterByRating={(rating) => setFilter({category:id,kind:"rating",rating})} /></aside>
+      <div className="store-listing-content">
+        {loading ? <ProductSkeletons /> : products.length ? <div className="store-product-grid">{products.map((product) => <Product key={product.id || product._id} item={product} />)}</div> : <div className="store-empty" role="status"><FiBox /><h2>No products to show</h2><p>{activeFilter ? "Try clearing your filter to see more products." : "Explore another category for more growing essentials."}</p>{activeFilter ? <button className="store-button" onClick={() => setFilter(null)}>Clear filter</button> : <Link className="store-button" to="/">Back to the store</Link>}</div>}
+      </div>
+    </div>
+  </section>;
 };
 
 export default Listing;
